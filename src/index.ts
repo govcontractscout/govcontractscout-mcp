@@ -124,6 +124,64 @@ async function gcs(path: string, params: Record<string, string> = {}) {
   return body;
 }
 
+// Shared contractor-profile schema for the scoring tools. Field names are
+// agent-friendly; toApiProfile() maps them to the API's validateProfile
+// contract (primary_skills, headquarters_state, min/max_contract_value).
+const scoringProfileSchema = z.object({
+  company_name: z.string().optional(),
+  naics_codes: z.array(z.string()).describe("NAICS codes, e.g. ['541511']"),
+  service_areas: z.array(z.string()).describe("State codes, e.g. ['TX']"),
+  headquarters_state: z
+    .string()
+    .optional()
+    .describe("2-letter HQ state; defaults to the first service area"),
+  budget_range_min: z.number().optional(),
+  budget_range_max: z.number().optional(),
+  skills: z.array(z.string()).describe("Primary skills/competencies"),
+  certifications: z.array(z.string()).optional().describe("Mapped to secondary skills"),
+});
+
+const winProfileSchema = scoringProfileSchema.extend({
+  target_agencies: z.array(z.string()).optional(),
+  past_agencies: z.array(z.string()).optional(),
+  years_in_business: z.number().optional(),
+  past_awards_count: z.number().optional(),
+  past_award_amount: z.number().optional(),
+});
+
+type ScoringProfile = z.infer<typeof scoringProfileSchema>;
+type WinProfile = z.infer<typeof winProfileSchema>;
+
+// Map the MCP profile shape to the API's validateProfile contract. The API
+// requires primary_skills + headquarters_state (no 'skills'/'budget_range'
+// aliases); without this mapping every score/win call would 422.
+function toApiProfile(profile: ScoringProfile | WinProfile): Record<string, unknown> {
+  const p: Record<string, unknown> = {
+    naics_codes: profile.naics_codes,
+    primary_skills: profile.skills,
+    service_areas: profile.service_areas,
+    headquarters_state: (
+      profile.headquarters_state ||
+      profile.service_areas?.[0] ||
+      ""
+    ).toUpperCase(),
+  };
+  if (profile.company_name) p.company_name = profile.company_name;
+  if (profile.budget_range_min != null) p.min_contract_value = profile.budget_range_min;
+  if (profile.budget_range_max != null) p.max_contract_value = profile.budget_range_max;
+  if (profile.certifications && profile.certifications.length) {
+    p.secondary_skills = profile.certifications;
+  }
+  // Win-specific extras (only present on winProfileSchema inputs).
+  const win = profile as WinProfile;
+  if (win.target_agencies) p.target_agencies = win.target_agencies;
+  if (win.past_agencies) p.past_agencies = win.past_agencies;
+  if (win.years_in_business != null) p.years_in_business = win.years_in_business;
+  if (win.past_awards_count != null) p.past_awards_count = win.past_awards_count;
+  if (win.past_award_amount != null) p.past_award_amount = win.past_award_amount;
+  return p;
+}
+
 // ---------------------------------------------------------------------------
 // Tool 1: search_contracts
 // ---------------------------------------------------------------------------
@@ -262,17 +320,9 @@ server.registerTool(
         .string()
         .regex(UUID_RE, "contract_id must be a UUID")
         .describe("UUID of the contract"),
-      profile: z
-        .object({
-          company_name: z.string().optional(),
-          naics_codes: z.array(z.string()).optional(),
-          service_areas: z.array(z.string()).describe("State codes, e.g. ['TX']").optional(),
-          budget_range_min: z.number().optional(),
-          budget_range_max: z.number().optional(),
-          skills: z.array(z.string()).optional(),
-          certifications: z.array(z.string()).optional(),
-        })
-        .describe("Contractor profile for matching"),
+      profile: scoringProfileSchema.describe(
+        "Contractor profile for matching (skills map to primary_skills; headquarters_state defaults to the first service area)",
+      ),
     }),
   },
   async ({ contract_id, profile }) => {
@@ -288,7 +338,7 @@ server.registerTool(
           // result, and retries don't re-burn quota.
           "Idempotency-Key": `mcp-match-${contract_id}`,
         },
-        body: JSON.stringify({ contract_id, profile }),
+        body: JSON.stringify({ contract_id, profile: toApiProfile(profile) }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (err) {
@@ -320,21 +370,9 @@ server.registerTool(
         .string()
         .regex(UUID_RE, "contract_id must be a UUID")
         .describe("UUID of the contract"),
-      profile: z
-        .object({
-          company_name: z.string().optional(),
-          naics_codes: z.array(z.string()).optional(),
-          service_areas: z.array(z.string()).describe("State codes, e.g. ['TX']").optional(),
-          budget_range_min: z.number().optional(),
-          budget_range_max: z.number().optional(),
-          skills: z.array(z.string()).optional(),
-          certifications: z.array(z.string()).optional(),
-          target_agencies: z.array(z.string()).optional(),
-          past_agencies: z.array(z.string()).optional(),
-          years_in_business: z.number().optional(),
-          past_awards_count: z.number().optional(),
-        })
-        .describe("Contractor profile for win-likelihood scoring"),
+      profile: winProfileSchema.describe(
+        "Contractor profile for win-likelihood scoring (skills map to primary_skills; headquarters_state defaults to the first service area)",
+      ),
     }),
   },
   async ({ contract_id, profile }) => {
@@ -348,7 +386,7 @@ server.registerTool(
           Accept: "application/json",
           "Idempotency-Key": `mcp-win-${contract_id}`,
         },
-        body: JSON.stringify({ contract_id, profile }),
+        body: JSON.stringify({ contract_id, profile: toApiProfile(profile) }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (err) {
