@@ -1,0 +1,38 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.govcontractscout/govcontractscout-mcp",
+  "description": "MCP server exposing GovContractScout's US state & local government contracts API to AI agents: search contracts, get details, NAICS lookup, list states, and AI match scoring.",
+  "repository": {
+    "url": "https://github.com/govcontractscout/govcontractscout-mcp",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "govcontractscout-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio",
+        "command": "npx",
+        "args": ["-y", "govcontractscout-mcp"]
+      },
+      "environmentVariables": [
+        {
+          "name": "GCS_API_KEY",
+          "description": "GovContractScout API key (gcs_live_...) from https://scout.govbidportals.com/api-keys",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "GOVCONTRACTSCOUT_API_BASE",
+          "description": "Optional: API base URL override (defaults to https://scout.govbidportals.com)",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
