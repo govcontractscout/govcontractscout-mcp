@@ -11,10 +11,12 @@ AI agent (Claude, Cursor, etc.)  ⇄  MCP  ⇄  GovContractScout /v1 API  ⇄  5
 | Tool | Description |
 |---|---|
 | `search_contracts` | Search active government contracts by state, NAICS, keyword (returns title, agency, due date, match signals) |
-| `get_contract` | Fetch one contract's full record by ID |
+| `get_contract` | Fetch one contract's full record by ID (includes the original solicitation link + documents) |
 | `search_naics` | Look up NAICS codes by keyword |
 | `get_states` | List the states we index + live contract counts |
 | `score_contract` | Score a contract's fit for a business profile (uses `/v1/match`) |
+| `win_likelihood` | Estimate win probability vs the historical award archetype — derived data, paid |
+| `archetypes` | List winning-business archetypes — who wins what — derived data, paid |
 
 All tools hit the same `/v1` API as the public REST endpoint — same data, same auth, same rate limits. Live data from state procurement portals, updated daily.
 
@@ -74,13 +76,14 @@ The agent calls `search_contracts` (state=CA, naics=IT services), then `score_co
 ## Design notes
 
 - **Idempotent scoring** — `score_contract` sends a deterministic `Idempotency-Key`, so retries never double-burn quota.
-- **Same moat as the API** — source URLs and raw source_portal fields are deliberately excluded; the data is our aggregation, and the MCP exposes exactly what the API exposes.
+- **Same moat as the API** — list/search results deliberately exclude source URLs and raw `source_portal` fields (that's the aggregation moat); `get_contract` detail includes the original solicitation link, exactly as the API does. The MCP exposes what the API exposes.
 - **Honest coverage** — contracts carry a `data_quality` field (level + which fields are populated). Some states have richer data than others; the API tells you exactly what you're getting.
 
 ## API / pricing
 
 - Free: 100 calls/month, no card
 - Starter $99/mo · Growth $199/mo · annual = 17% off
+- `win_likelihood` and `archetypes` are **paid-tier (Starter+)** — the derived-data layer
 - Full API docs: [scout.govbidportals.com/docs/api](https://scout.govbidportals.com/docs/api)
 
 ## Development
