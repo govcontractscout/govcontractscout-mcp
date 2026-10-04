@@ -25,8 +25,13 @@ jobs:
       - name: Build package
         run: npm run build --if-present
 
-      - name: Publish package to npm
-        run: npm publish
+      - name: Publish package to npm (if version is new)
+        run: |
+          if npm view . version 2>/dev/null; then
+            echo "Version already published, skipping npm publish"
+          else
+            npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
