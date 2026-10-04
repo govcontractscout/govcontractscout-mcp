@@ -2,8 +2,7 @@ name: Publish to MCP Registry
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
 jobs:
   publish:
@@ -26,18 +25,8 @@ jobs:
       - name: Build package
         run: npm run build --if-present
 
-      - name: Publish package to npm (if version is new)
-        # The MCP Registry only hosts metadata — the npm package must already
-        # exist at server.json's referenced version. Skip when the version is
-        # already published (e.g. tagging v1.0.0 again to (re)publish the
-        # registry entry) so a stale publish can't block the registry step.
-        if: ${{ secrets.NPM_TOKEN != '' }}
-        run: |
-          if npm view . version 2>/dev/null; then
-            echo "npm version already published — skipping npm publish"
-          else
-            npm publish
-          fi
+      - name: Publish package to npm
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
