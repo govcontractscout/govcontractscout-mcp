@@ -69,6 +69,63 @@ function apiErrorMessage(body, status) {
     }
     return `API error (HTTP ${status})`;
 }
+// ── Retry with bounded backoff ───────────────────────────────────────
+// The API is quota-gated: a 429 (rate limit / monthly cap) and a 503
+// (fail-closed usage check) are transient — a bounded retry usually clears
+// them. GETs are safe to retry; the scoring POSTs below carry a
+// deterministic Idempotency-Key, so a retry returns the cached result
+// instead of re-burning quota. Timeouts are NOT retried: a request that ran
+// 30s and timed out is a signal (the API is genuinely slow/expensive), and
+// re-firing it doubles load on a struggling service.
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 500;
+const RETRY_MAX_MS = 5000;
+function sleep(ms) {
+    const { promise, resolve } = Promise.withResolvers();
+    setTimeout(resolve, ms);
+    return promise;
+}
+// Exponential delay with jitter; a server-sent Retry-After wins over the
+// exponential schedule when it is longer (429s carry one).
+function retryDelayMs(attempt, retryAfterSec) {
+    const exp = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** attempt);
+    const jitter = Math.random() * 250;
+    const fromHeader = retryAfterSec != null ? retryAfterSec * 1000 : 0;
+    return Math.max(exp, fromHeader) + jitter;
+}
+/**
+ * fetch() with bounded exponential backoff on retryable failures (429, 503,
+ * and transport errors). Honors the server's Retry-After header. Returns the
+ * final Response whether it succeeded or exhausted retries.
+ */
+async function fetchWithRetry(url, init) {
+    for (let attempt = 0;; attempt++) {
+        let res;
+        try {
+            res = await fetch(url, init);
+        }
+        catch (err) {
+            if (err instanceof Error &&
+                (err.name === "TimeoutError" || err.name === "AbortError")) {
+                throw new Error(`API request timed out after ${TIMEOUT_MS / 1000}s`);
+            }
+            // Transport failure (DNS, refused, dropped connection) — retryable.
+            if (attempt < MAX_RETRIES) {
+                await sleep(retryDelayMs(attempt, null));
+                continue;
+            }
+            throw err;
+        }
+        if ((res.status !== 429 && res.status !== 503) || attempt >= MAX_RETRIES) {
+            return res;
+        }
+        const retryAfterHeader = res.headers.get("retry-after");
+        const retryAfterSec = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+        // Drain the body so the connection can be reused; it is never re-read.
+        await res.text().catch(() => { });
+        await sleep(retryDelayMs(attempt, Number.isFinite(retryAfterSec) ? retryAfterSec : null));
+    }
+}
 if (!API_KEY) {
     console.error("Missing GCS_API_KEY. Set it to your GovContractScout API key (gcs_live_...).");
     process.exit(1);
@@ -87,22 +144,13 @@ async function gcs(path, params = {}) {
         if (v !== undefined && v !== null && v !== "")
             url.searchParams.set(k, v);
     }
-    let res;
-    try {
-        res = await fetch(url.toString(), {
-            headers: {
-                Authorization: `Bearer ${API_KEY}`,
-                Accept: "application/json",
-            },
-            signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-    }
-    catch (err) {
-        if (err instanceof Error && err.name === "TimeoutError") {
-            throw new Error(`API request timed out after ${TIMEOUT_MS / 1000}s`);
-        }
-        throw err;
-    }
+    const res = await fetchWithRetry(url.toString(), {
+        headers: {
+            Authorization: `Bearer ${API_KEY}`,
+            Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     const body = await res
         .json()
         .catch(() => ({ error: "Invalid JSON response" }));
@@ -283,28 +331,19 @@ server.registerTool("score_contract", {
         profile: scoringProfileSchema.describe("Contractor profile for matching (skills map to primary_skills; headquarters_state defaults to the first service area)"),
     }),
 }, async ({ contract_id, profile }) => {
-    let res;
-    try {
-        res = await fetch(`${validateApiBase(API_BASE)}/api/v1/match`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${API_KEY}`,
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                // Deterministic idempotency key: same contract + profile = same
-                // result, and retries don't re-burn quota.
-                "Idempotency-Key": `mcp-match-${contract_id}`,
-            },
-            body: JSON.stringify({ contract_id, profile: toApiProfile(profile) }),
-            signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-    }
-    catch (err) {
-        if (err instanceof Error && err.name === "TimeoutError") {
-            throw new Error(`Match API request timed out after ${TIMEOUT_MS / 1000}s`);
-        }
-        throw err;
-    }
+    const res = await fetchWithRetry(`${validateApiBase(API_BASE)}/api/v1/match`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${API_KEY}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            // Deterministic idempotency key: same contract + profile = same
+            // result, and retries don't re-burn quota.
+            "Idempotency-Key": `mcp-match-${contract_id}`,
+        },
+        body: JSON.stringify({ contract_id, profile: toApiProfile(profile) }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
         throw new Error(apiErrorMessage(body, res.status));
@@ -326,26 +365,17 @@ server.registerTool("win_likelihood", {
         profile: winProfileSchema.describe("Contractor profile for win-likelihood scoring (skills map to primary_skills; headquarters_state defaults to the first service area)"),
     }),
 }, async ({ contract_id, profile }) => {
-    let res;
-    try {
-        res = await fetch(`${validateApiBase(API_BASE)}/api/v1/win-likelihood`, {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${API_KEY}`,
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                "Idempotency-Key": `mcp-win-${contract_id}`,
-            },
-            body: JSON.stringify({ contract_id, profile: toApiProfile(profile) }),
-            signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-    }
-    catch (err) {
-        if (err instanceof Error && err.name === "TimeoutError") {
-            throw new Error(`Win-likelihood request timed out after ${TIMEOUT_MS / 1000}s`);
-        }
-        throw err;
-    }
+    const res = await fetchWithRetry(`${validateApiBase(API_BASE)}/api/v1/win-likelihood`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${API_KEY}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "Idempotency-Key": `mcp-win-${contract_id}`,
+        },
+        body: JSON.stringify({ contract_id, profile: toApiProfile(profile) }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
         throw new Error(apiErrorMessage(body, res.status));
