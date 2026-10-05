@@ -1,5 +1,7 @@
 # GovContractScout MCP Server
 
+[![GovContractScout MCP Server on AI Agents Listing](https://aiagentslisting.com/govcontractscout-mcp-server/badge.svg?claim=58d0f992f9305e56b291f493055e849b)](https://aiagentslisting.com/mcp/govcontractscout-mcp-server)
+
 Model Context Protocol (MCP) server exposing the [GovContractScout](https://scout.govbidportals.com) US state & local government contracts API to AI agents. Search live contracts, pull details, look up NAICS codes, list states, and score contract fit — without raw HTTP.
 
 ```text
