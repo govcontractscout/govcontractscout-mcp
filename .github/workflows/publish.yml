@@ -25,10 +25,33 @@ jobs:
       - name: Build package
         run: npm run build --if-present
 
+      # Pre-flight the registry manifest BEFORE the npm publish. The registry
+      # rejected v1.0.1 with 422 "expected length <= 100" on description, and
+      # because npm publishes first that would have left a version on npm with
+      # no registry entry. Fail here instead.
+      - name: Validate the registry manifest
+        run: |
+          set -e
+          DESC_LEN=$(jq -r '.description | length' server.json)
+          if [ "$DESC_LEN" -gt 100 ]; then
+            echo "server.json description is $DESC_LEN characters; the registry caps it at 100"
+            exit 1
+          fi
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "package.json is $PKG_VERSION but the tag is $TAG_VERSION"
+            exit 1
+          fi
+
+      # Publish only when THIS version is missing from npm. The previous guard
+      # (`npm view . version`) was truthy for any published version, so every
+      # release after 1.0.0 skipped the npm publish in silence.
       - name: Publish package to npm (if version is new)
         run: |
-          if npm view . version 2>/dev/null; then
-            echo "Version already published, skipping npm publish"
+          LOCAL=$(node -p "require('./package.json').version")
+          if npm view "govcontractscout-mcp@$LOCAL" version >/dev/null 2>&1; then
+            echo "govcontractscout-mcp@$LOCAL is already on npm, skipping publish"
           else
             npm publish
           fi
