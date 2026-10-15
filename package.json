@@ -1,7 +1,7 @@
 {
   "name": "govcontractscout-mcp",
-  "version": "1.0.0",
-  "description": "MCP server exposing GovContractScout's US state & local government contracts API (search contracts, get details, NAICS lookup, AI match scoring) to AI agents.",
+  "version": "1.0.1",
+  "description": "MCP server exposing GovContractScout's US state, local, and federal government contracts API (search contracts, get details, NAICS lookup, AI match scoring) to AI agents.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

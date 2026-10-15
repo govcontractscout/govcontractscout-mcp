@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.govcontractscout/govcontractscout-mcp",
-  "description": "MCP server exposing the GovContractScout US government contracts API to AI agents.",
+  "description": "MCP server exposing the GovContractScout US state, local, and federal government contracts API to AI agents. A remote Streamable HTTP endpoint with the same tools runs at https://scout.govbidportals.com/mcp.",
   "repository": {
     "url": "https://github.com/govcontractscout/govcontractscout-mcp",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "1.0.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "govcontractscout-mcp",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "transport": {
         "type": "stdio"
       },

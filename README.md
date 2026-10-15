@@ -2,7 +2,7 @@
 
 [![GovContractScout MCP Server on AI Agents Listing](https://aiagentslisting.com/govcontractscout-mcp-server/badge.svg?claim=58d0f992f9305e56b291f493055e849b)](https://aiagentslisting.com/mcp/govcontractscout-mcp-server)
 
-Model Context Protocol (MCP) server exposing the [GovContractScout](https://scout.govbidportals.com) US state & local government contracts API to AI agents. Search live contracts, pull details, look up NAICS codes, list states, and score contract fit — without raw HTTP.
+Model Context Protocol (MCP) server exposing the [GovContractScout](https://scout.govbidportals.com) US state, local, and federal government contracts API to AI agents. Search live contracts, pull details, look up NAICS codes, list states, and score contract fit — without raw HTTP.
 
 ```text
 AI agent (Claude, Cursor, etc.)  ⇄  MCP  ⇄  GovContractScout /v1 API  ⇄  50-state procurement data
@@ -21,6 +21,25 @@ AI agent (Claude, Cursor, etc.)  ⇄  MCP  ⇄  GovContractScout /v1 API  ⇄  5
 | `archetypes` | List winning-business archetypes — who wins what — derived data, paid |
 
 All tools hit the same `/v1` API as the public REST endpoint — same data, same auth, same rate limits. Live data from state procurement portals, updated daily.
+
+## Hosted endpoint (no install)
+
+There is also a remote server at `https://scout.govbidportals.com/mcp` — Streamable HTTP, protocol `2025-06-18`, nothing to install. It serves everything above plus `get_profile` (8 tools total).
+
+Two ways to authenticate:
+
+1. **OAuth 2.1** — clients that support it connect on their own. The 401 challenge points at `https://scout.govbidportals.com/.well-known/oauth-protected-resource`, then you sign in and link your account.
+2. **API key header** — a client that only sends fixed headers can pass the same `gcs_live_...` key the REST API takes:
+
+```bash
+curl -X POST https://scout.govbidportals.com/mcp \
+  -H "Authorization: Bearer gcs_live_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"my-agent","version":"1"}}}'
+```
+
+Both credentials carry the same plan, quota, and rate limits as the key you would use locally.
 
 ## Requirements
 
