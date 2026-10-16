@@ -74,5 +74,23 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
 
+      # The registry validates that the npm version is resolvable and rejects
+      # the publish (400, "version was not found (status: 404)") if npm has not
+      # propagated yet - which is what failed the v1.0.2 run seconds after
+      # npm publish succeeded. Wait for npm to serve the version first.
+      - name: Wait for npm to serve the published version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          for i in $(seq 1 20); do
+            if npm view "govcontractscout-mcp@$VERSION" version >/dev/null 2>&1; then
+              echo "npm serves govcontractscout-mcp@$VERSION"
+              exit 0
+            fi
+            echo "waiting for npm to serve $VERSION ($i/20)"
+            sleep 15
+          done
+          echo "npm never served $VERSION"
+          exit 1
+
       - name: Publish server to MCP Registry
         run: ./mcp-publisher publish
