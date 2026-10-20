@@ -45,7 +45,7 @@ Both credentials carry the same plan, quota, and rate limits as the key you woul
 ## Requirements
 
 - Node.js 18+
-- A GovContractScout API key (`gcs_live_...`) — free tier works (100 calls/month); paid tiers for production. Get one at [scout.govbidportals.com/api-keys](https://scout.govbidportals.com/api-keys) — instant, no card.
+- A GovContractScout API key (`gcs_live_...`) — free tier works (100 calls/month); paid tiers for production. **Paid tiers need no account:** buy at [scout.govbidportals.com/docs/api#pricing](https://scout.govbidportals.com/docs/api#pricing) and the key is emailed to you on checkout. The free tier needs an account: [scout.govbidportals.com/api-keys](https://scout.govbidportals.com/api-keys) — instant, no card.
 
 ## Quickstart
 
@@ -103,7 +103,8 @@ The agent calls `search_contracts` (state=CA, naics=IT services), then `score_co
 
 ## API / pricing
 
-- Free: 100 calls/month, no card
+- Free: 100 calls/month, account required
+- Paid: **no account required** — buy at `scout.govbidportals.com/docs/api#pricing`; the key is emailed on checkout
 - Starter $99/mo · Growth $199/mo · annual = 17% off
 - `win_likelihood` and `archetypes` are **paid-tier (Starter+)** — the derived-data layer
 - Full API docs: [scout.govbidportals.com/docs/api](https://scout.govbidportals.com/docs/api)
