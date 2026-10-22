@@ -34,7 +34,7 @@
   "author": "Josef Adlao <jadlao@gmail.com>",
   "mcpName": "io.github.govcontractscout/govcontractscout-mcp",
   "dependencies": {
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "^2.3.1",
     "zod": "4.5.4"
   },
   "devDependencies": {
