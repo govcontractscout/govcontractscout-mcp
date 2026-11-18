@@ -6,7 +6,7 @@
     "url": "https://github.com/govcontractscout/govcontractscout-mcp",
     "source": "github"
   },
-  "version": "1.0.5",
+  "version": "1.0.6",
   "packages": [
     {
       "registryType": "npm",
@@ -31,6 +31,12 @@
           "format": "string"
         }
       ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://scout.govbidportals.com/mcp"
     }
   ]
 }
